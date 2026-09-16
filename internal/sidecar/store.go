@@ -66,10 +66,11 @@ func (s *Store) CreateTask(input CreateTaskInput) (SideTask, error) {
 		INSERT INTO side_tasks (
 			id, title, project_path, provider_preference, provider_used,
 			label_id, status, priority, session_id, created_at, updated_at,
-			last_error, archived
-		) VALUES (?, ?, ?, ?, '', ?, ?, ?, '', ?, ?, '', 0)`,
+			last_error, archived, codex_model, claude_model
+		) VALUES (?, ?, ?, ?, '', ?, ?, ?, '', ?, ?, '', 0, ?, ?)`,
 		task.ID, task.Title, task.ProjectPath, task.ProviderPreference,
 		task.LabelID, task.Status, task.Priority, task.CreatedAt, task.UpdatedAt,
+		input.CodexModel, input.ClaudeModel,
 	)
 	if err != nil {
 		return SideTask{}, fmt.Errorf("insert side task: %w", err)
@@ -89,7 +90,7 @@ func (s *Store) CreateTask(input CreateTaskInput) (SideTask, error) {
 func (s *Store) ListTasks(includeArchived bool) ([]SideTask, error) {
 	query := `SELECT id, title, project_path, provider_preference, provider_used,
 		label_id, status, priority, session_id, created_at, updated_at,
-		last_run_at, last_error, archived
+		last_run_at, last_error, archived, codex_model, claude_model
 		FROM side_tasks`
 	if !includeArchived {
 		query += ` WHERE archived = 0`
@@ -116,7 +117,7 @@ func (s *Store) ListTasks(includeArchived bool) ([]SideTask, error) {
 func (s *Store) GetTask(id string) (SideTask, error) {
 	row := s.db.SQL().QueryRow(`SELECT id, title, project_path, provider_preference,
 		provider_used, label_id, status, priority, session_id, created_at, updated_at,
-		last_run_at, last_error, archived FROM side_tasks WHERE id = ?`, id)
+		last_run_at, last_error, archived, codex_model, claude_model FROM side_tasks WHERE id = ?`, id)
 	task, err := scanTask(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SideTask{}, ErrNotFound
@@ -144,6 +145,12 @@ func (s *Store) UpdateTask(id string, input UpdateTaskInput) (SideTask, error) {
 		}
 		task.ProviderPreference = *input.ProviderPreference
 	}
+	if input.CodexModel != nil {
+		task.CodexModel = strings.TrimSpace(*input.CodexModel)
+	}
+	if input.ClaudeModel != nil {
+		task.ClaudeModel = strings.TrimSpace(*input.ClaudeModel)
+	}
 	if input.LabelID != nil {
 		task.LabelID = strings.TrimSpace(*input.LabelID)
 	}
@@ -164,8 +171,8 @@ func (s *Store) UpdateTask(id string, input UpdateTaskInput) (SideTask, error) {
 
 	_, err = s.db.SQL().Exec(`UPDATE side_tasks SET title = ?, project_path = ?,
 		provider_preference = ?, label_id = ?, status = ?, priority = ?, updated_at = ?,
-		archived = ? WHERE id = ?`, task.Title, task.ProjectPath, task.ProviderPreference,
-		task.LabelID, task.Status, task.Priority, task.UpdatedAt, task.Archived, task.ID)
+		archived = ?, codex_model = ?, claude_model = ? WHERE id = ?`, task.Title, task.ProjectPath, task.ProviderPreference,
+		task.LabelID, task.Status, task.Priority, task.UpdatedAt, task.Archived, task.CodexModel, task.ClaudeModel, task.ID)
 	if err != nil {
 		return SideTask{}, fmt.Errorf("update side task: %w", err)
 	}
@@ -420,7 +427,7 @@ func scanTask(row scanner) (SideTask, error) {
 	if err := row.Scan(&task.ID, &task.Title, &task.ProjectPath,
 		&task.ProviderPreference, &task.ProviderUsed, &task.LabelID, &task.Status,
 		&task.Priority, &task.SessionID, &task.CreatedAt, &task.UpdatedAt,
-		&lastRun, &task.LastError, &archived); err != nil {
+		&lastRun, &task.LastError, &archived, &task.CodexModel, &task.ClaudeModel); err != nil {
 		return SideTask{}, err
 	}
 	if lastRun.Valid {

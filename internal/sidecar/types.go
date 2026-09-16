@@ -43,6 +43,8 @@ type SideTask struct {
 	Title              string             `json:"title"`
 	ProjectPath        string             `json:"project_path"`
 	ProviderPreference ProviderPreference `json:"provider_preference"`
+	CodexModel         string             `json:"codex_model"`
+	ClaudeModel        string             `json:"claude_model"`
 	ProviderUsed       string             `json:"provider_used"`
 	LabelID            string             `json:"label_id"`
 	Status             TaskStatus         `json:"status"`
@@ -82,6 +84,8 @@ type CreateTaskInput struct {
 	Prompt             string             `json:"prompt"`
 	ProjectPath        string             `json:"project_path"`
 	ProviderPreference ProviderPreference `json:"provider_preference"`
+	CodexModel         string             `json:"codex_model"`
+	ClaudeModel        string             `json:"claude_model"`
 	LabelID            string             `json:"label_id"`
 	Priority           int                `json:"priority"`
 }
@@ -90,6 +94,8 @@ type UpdateTaskInput struct {
 	Title              *string             `json:"title,omitempty"`
 	ProjectPath        *string             `json:"project_path,omitempty"`
 	ProviderPreference *ProviderPreference `json:"provider_preference,omitempty"`
+	CodexModel         *string             `json:"codex_model,omitempty"`
+	ClaudeModel        *string             `json:"claude_model,omitempty"`
 	LabelID            *string             `json:"label_id,omitempty"`
 	Priority           *int                `json:"priority,omitempty"`
 	Status             *TaskStatus         `json:"status,omitempty"`

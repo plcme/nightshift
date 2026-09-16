@@ -71,12 +71,19 @@ func (e *CLIExecutor) executeCodex(ctx context.Context, task SideTask, prompt st
 	var args []string
 	if task.SessionID == "" {
 		args = []string{"exec", "--json", "--sandbox", "workspace-write", "--output-last-message", lastPath}
+		if task.CodexModel != "" {
+			args = append(args, "--model", task.CodexModel)
+		}
 		if task.ProjectPath != "" {
 			args = append(args, "--cd", task.ProjectPath)
 		}
 		args = append(args, prompt)
 	} else {
-		args = []string{"exec", "resume", "--json", "--output-last-message", lastPath, task.SessionID, prompt}
+		args = []string{"exec", "resume", "--json", "--output-last-message", lastPath}
+		if task.CodexModel != "" {
+			args = append(args, "--model", task.CodexModel)
+		}
+		args = append(args, task.SessionID, prompt)
 	}
 	stdout, stderr, err := runCLI(ctx, binary, args, task.ProjectPath)
 	if err != nil {
@@ -104,6 +111,9 @@ func (e *CLIExecutor) executeClaude(ctx context.Context, task SideTask, prompt s
 	}
 	sessionID := task.SessionID
 	args := []string{"--print", "--output-format", "json", "--permission-mode", "acceptEdits"}
+	if task.ClaudeModel != "" {
+		args = append(args, "--model", task.ClaudeModel)
+	}
 	if sessionID == "" {
 		sessionID = uuid.NewString()
 		args = append(args, "--session-id", sessionID)

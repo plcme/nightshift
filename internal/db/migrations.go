@@ -45,6 +45,11 @@ var migrations = []Migration{
 		Description: "add persistent side tasks, messages, labels, and settings",
 		SQL:         migration006SQL,
 	},
+	{
+		Version:     7,
+		Description: "add per-provider model preferences to side tasks",
+		SQL:         migration007SQL,
+	},
 }
 
 const migration002SQL = `
@@ -183,6 +188,11 @@ INSERT INTO side_labels (
     'side', '副业', '🌙', '#8b5cf6', '副业任务', 'auto', 10, 20,
     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 );
+`
+
+const migration007SQL = `
+ALTER TABLE side_tasks ADD COLUMN codex_model TEXT NOT NULL DEFAULT '';
+ALTER TABLE side_tasks ADD COLUMN claude_model TEXT NOT NULL DEFAULT '';
 `
 
 // Migrate runs all pending migrations inside transactions.
