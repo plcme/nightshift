@@ -78,8 +78,13 @@ func (s *LiveQuotaSource) readClaude(ctx context.Context, now time.Time) Provide
 		quota.Error = "claude CLI not installed"
 		return quota
 	}
-	if loggedIn, known := claudeLoginStatus(ctx, claudeBinary); known && !loggedIn {
+	loggedIn, known := claudeLoginStatus(ctx, claudeBinary)
+	if known && !loggedIn {
 		quota.Error = "claude CLI is not logged in"
+		return quota
+	}
+	if !known {
+		quota.Error = "could not verify Claude login; run `claude auth status`"
 		return quota
 	}
 	usage, err := s.claudeProbe(ctx)
