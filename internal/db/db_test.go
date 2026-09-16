@@ -23,6 +23,10 @@ func TestOpenCreatesSchema(t *testing.T) {
 		"assigned_tasks",
 		"run_history",
 		"snapshots",
+		"side_labels",
+		"side_tasks",
+		"side_messages",
+		"side_settings",
 	}
 
 	for _, table := range tables {

@@ -136,6 +136,30 @@ Current week (all models)
 	}
 }
 
+func TestParseSessionPct(t *testing.T) {
+	tests := []struct {
+		name string
+		fn   func(string) (float64, error)
+		text string
+		want float64
+	}{
+		{"claude used", parseClaudeSessionPct, "Current session\n████ 31% used", 31},
+		{"codex left", parseCodexSessionPct, "5h limit: [████] 72% left (resets 20:15)", 28},
+		{"codex used", parseCodexSessionPct, "5h limit: 28% used", 28},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.fn(tt.text)
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCountNonEmptyLines(t *testing.T) {
 	tests := []struct {
 		name  string

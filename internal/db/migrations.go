@@ -40,6 +40,11 @@ var migrations = []Migration{
 		Description: "add branch column to run_history",
 		SQL:         migration005SQL,
 	},
+	{
+		Version:     6,
+		Description: "add persistent side tasks, messages, labels, and settings",
+		SQL:         migration006SQL,
+	},
 }
 
 const migration002SQL = `
@@ -119,6 +124,65 @@ CREATE INDEX idx_run_history_time ON run_history(start_time DESC);
 
 const migration005SQL = `
 ALTER TABLE run_history ADD COLUMN branch TEXT NOT NULL DEFAULT '';
+`
+
+const migration006SQL = `
+CREATE TABLE side_labels (
+    id                         TEXT PRIMARY KEY,
+    name                       TEXT NOT NULL,
+    emoji                      TEXT NOT NULL DEFAULT '',
+    color                      TEXT NOT NULL DEFAULT '#64748b',
+    codex_section              TEXT NOT NULL DEFAULT '',
+    default_provider           TEXT NOT NULL DEFAULT 'auto',
+    min_window_remaining_pct   REAL NOT NULL DEFAULT 10,
+    weekly_reserve_pct         REAL NOT NULL DEFAULT 20,
+    created_at                 DATETIME NOT NULL,
+    updated_at                 DATETIME NOT NULL
+);
+
+CREATE TABLE side_tasks (
+    id                  TEXT PRIMARY KEY,
+    title               TEXT NOT NULL,
+    project_path        TEXT NOT NULL DEFAULT '',
+    provider_preference TEXT NOT NULL DEFAULT 'auto',
+    provider_used       TEXT NOT NULL DEFAULT '',
+    label_id            TEXT NOT NULL DEFAULT '',
+    status              TEXT NOT NULL DEFAULT 'queued',
+    priority            INTEGER NOT NULL DEFAULT 50,
+    session_id          TEXT NOT NULL DEFAULT '',
+    created_at          DATETIME NOT NULL,
+    updated_at          DATETIME NOT NULL,
+    last_run_at         DATETIME,
+    last_error          TEXT NOT NULL DEFAULT '',
+    archived            INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE side_messages (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id       TEXT NOT NULL,
+    role          TEXT NOT NULL,
+    content       TEXT NOT NULL,
+    created_at    DATETIME NOT NULL,
+    dispatched_at DATETIME,
+    FOREIGN KEY (task_id) REFERENCES side_tasks(id) ON DELETE CASCADE
+);
+
+CREATE TABLE side_settings (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+
+CREATE INDEX idx_side_tasks_status_priority ON side_tasks(archived, status, priority DESC, created_at ASC);
+CREATE INDEX idx_side_messages_task_time ON side_messages(task_id, created_at ASC);
+
+INSERT INTO side_labels (
+    id, name, emoji, color, codex_section, default_provider,
+    min_window_remaining_pct, weekly_reserve_pct, created_at, updated_at
+) VALUES (
+    'side', '副业', '🌙', '#8b5cf6', '副业任务', 'auto', 10, 20,
+    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+);
 `
 
 // Migrate runs all pending migrations inside transactions.

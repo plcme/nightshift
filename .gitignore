@@ -51,3 +51,10 @@ website/node_modules/
 website/build/
 website/.docusaurus/
 website/.cache-loader/
+
+# Quota harvest GUI
+gui/node_modules/
+gui/.next/
+gui/.vinext/
+gui/.wrangler/
+gui/dist/

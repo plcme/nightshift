@@ -1,3 +1,43 @@
+# SpareRun (work in progress)
+
+This fork adds a local quota-harvest console on top of Nightshift. Instead of
+running a reusable maintenance template at a fixed time, SpareRun keeps
+user-created Codex and Claude conversations, waits until a five-hour quota
+window is close to resetting, and then runs or resumes one queued turn.
+
+The execution switch is **off by default**. Merely opening the GUI or adding a
+task cannot spend quota.
+
+Current fork additions:
+
+- persistent tasks, messages, labels, and provider session IDs in SQLite;
+- live Codex quota reads through the official local App Server protocol;
+- Claude quota reads through the existing Nightshift usage scraper;
+- duration-based five-hour and weekly window classification;
+- quota-triggered eligibility with weekly reserve and reset safety margin;
+- safe Codex/Claude session continuation without bypass flags;
+- a local JSON API (`nightshift sidecar serve`); and
+- the GUI under [`gui/`](gui/).
+
+Local development:
+
+```bash
+# Terminal 1: local API and quota observer. Automatic execution is off initially.
+go run ./cmd/nightshift sidecar serve
+
+# Terminal 2: GUI
+cd gui
+npm ci
+npm run dev
+```
+
+Open <http://localhost:3000>. Enable automatic execution in the GUI only after
+reviewing the queued tasks and project paths.
+
+The original Nightshift documentation follows.
+
+---
+
 # Nightshift
 
 > It finds what you forgot to look for.
