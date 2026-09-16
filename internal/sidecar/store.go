@@ -39,21 +39,32 @@ func (s *Store) CreateTask(input CreateTaskInput) (SideTask, error) {
 	if input.Priority == 0 {
 		input.Priority = 50
 	}
+	if input.MaxRunMinutes == 0 {
+		input.MaxRunMinutes = 30
+	}
 	if input.Priority < 1 || input.Priority > 100 {
 		return SideTask{}, errors.New("priority must be between 1 and 100")
+	}
+	if input.MinFiveHourRemainingPct < 0 || input.MinFiveHourRemainingPct > 100 {
+		return SideTask{}, errors.New("minimum 5h remaining must be between 0 and 100")
+	}
+	if input.MaxRunMinutes < 5 || input.MaxRunMinutes > 240 {
+		return SideTask{}, errors.New("maximum run minutes must be between 5 and 240")
 	}
 
 	now := time.Now().UTC()
 	task := SideTask{
-		ID:                 uuid.NewString(),
-		Title:              input.Title,
-		ProjectPath:        strings.TrimSpace(input.ProjectPath),
-		ProviderPreference: input.ProviderPreference,
-		LabelID:            strings.TrimSpace(input.LabelID),
-		Status:             StatusQueued,
-		Priority:           input.Priority,
-		CreatedAt:          now,
-		UpdatedAt:          now,
+		ID:                      uuid.NewString(),
+		Title:                   input.Title,
+		ProjectPath:             strings.TrimSpace(input.ProjectPath),
+		ProviderPreference:      input.ProviderPreference,
+		LabelID:                 strings.TrimSpace(input.LabelID),
+		Status:                  StatusQueued,
+		Priority:                input.Priority,
+		MinFiveHourRemainingPct: input.MinFiveHourRemainingPct,
+		MaxRunMinutes:           input.MaxRunMinutes,
+		CreatedAt:               now,
+		UpdatedAt:               now,
 	}
 
 	tx, err := s.db.SQL().Begin()
@@ -66,11 +77,12 @@ func (s *Store) CreateTask(input CreateTaskInput) (SideTask, error) {
 		INSERT INTO side_tasks (
 			id, title, project_path, provider_preference, provider_used,
 			label_id, status, priority, session_id, created_at, updated_at,
-			last_error, archived, codex_model, claude_model
-		) VALUES (?, ?, ?, ?, '', ?, ?, ?, '', ?, ?, '', 0, ?, ?)`,
+			last_error, archived, codex_model, claude_model,
+			min_five_hour_remaining_pct, max_run_minutes
+		) VALUES (?, ?, ?, ?, '', ?, ?, ?, '', ?, ?, '', 0, ?, ?, ?, ?)`,
 		task.ID, task.Title, task.ProjectPath, task.ProviderPreference,
 		task.LabelID, task.Status, task.Priority, task.CreatedAt, task.UpdatedAt,
-		input.CodexModel, input.ClaudeModel,
+		input.CodexModel, input.ClaudeModel, input.MinFiveHourRemainingPct, input.MaxRunMinutes,
 	)
 	if err != nil {
 		return SideTask{}, fmt.Errorf("insert side task: %w", err)
@@ -90,7 +102,8 @@ func (s *Store) CreateTask(input CreateTaskInput) (SideTask, error) {
 func (s *Store) ListTasks(includeArchived bool) ([]SideTask, error) {
 	query := `SELECT id, title, project_path, provider_preference, provider_used,
 		label_id, status, priority, session_id, created_at, updated_at,
-		last_run_at, last_error, archived, codex_model, claude_model
+		last_run_at, last_error, archived, codex_model, claude_model,
+		min_five_hour_remaining_pct, max_run_minutes
 		FROM side_tasks`
 	if !includeArchived {
 		query += ` WHERE archived = 0`
@@ -117,7 +130,8 @@ func (s *Store) ListTasks(includeArchived bool) ([]SideTask, error) {
 func (s *Store) GetTask(id string) (SideTask, error) {
 	row := s.db.SQL().QueryRow(`SELECT id, title, project_path, provider_preference,
 		provider_used, label_id, status, priority, session_id, created_at, updated_at,
-		last_run_at, last_error, archived, codex_model, claude_model FROM side_tasks WHERE id = ?`, id)
+		last_run_at, last_error, archived, codex_model, claude_model,
+		min_five_hour_remaining_pct, max_run_minutes FROM side_tasks WHERE id = ?`, id)
 	task, err := scanTask(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SideTask{}, ErrNotFound
@@ -151,6 +165,18 @@ func (s *Store) UpdateTask(id string, input UpdateTaskInput) (SideTask, error) {
 	if input.ClaudeModel != nil {
 		task.ClaudeModel = strings.TrimSpace(*input.ClaudeModel)
 	}
+	if input.MinFiveHourRemainingPct != nil {
+		if *input.MinFiveHourRemainingPct < 0 || *input.MinFiveHourRemainingPct > 100 {
+			return SideTask{}, errors.New("minimum 5h remaining must be between 0 and 100")
+		}
+		task.MinFiveHourRemainingPct = *input.MinFiveHourRemainingPct
+	}
+	if input.MaxRunMinutes != nil {
+		if *input.MaxRunMinutes < 5 || *input.MaxRunMinutes > 240 {
+			return SideTask{}, errors.New("maximum run minutes must be between 5 and 240")
+		}
+		task.MaxRunMinutes = *input.MaxRunMinutes
+	}
 	if input.LabelID != nil {
 		task.LabelID = strings.TrimSpace(*input.LabelID)
 	}
@@ -171,8 +197,10 @@ func (s *Store) UpdateTask(id string, input UpdateTaskInput) (SideTask, error) {
 
 	_, err = s.db.SQL().Exec(`UPDATE side_tasks SET title = ?, project_path = ?,
 		provider_preference = ?, label_id = ?, status = ?, priority = ?, updated_at = ?,
-		archived = ?, codex_model = ?, claude_model = ? WHERE id = ?`, task.Title, task.ProjectPath, task.ProviderPreference,
-		task.LabelID, task.Status, task.Priority, task.UpdatedAt, task.Archived, task.CodexModel, task.ClaudeModel, task.ID)
+		archived = ?, codex_model = ?, claude_model = ?, min_five_hour_remaining_pct = ?,
+		max_run_minutes = ? WHERE id = ?`, task.Title, task.ProjectPath, task.ProviderPreference,
+		task.LabelID, task.Status, task.Priority, task.UpdatedAt, task.Archived, task.CodexModel, task.ClaudeModel,
+		task.MinFiveHourRemainingPct, task.MaxRunMinutes, task.ID)
 	if err != nil {
 		return SideTask{}, fmt.Errorf("update side task: %w", err)
 	}
@@ -427,7 +455,8 @@ func scanTask(row scanner) (SideTask, error) {
 	if err := row.Scan(&task.ID, &task.Title, &task.ProjectPath,
 		&task.ProviderPreference, &task.ProviderUsed, &task.LabelID, &task.Status,
 		&task.Priority, &task.SessionID, &task.CreatedAt, &task.UpdatedAt,
-		&lastRun, &task.LastError, &archived, &task.CodexModel, &task.ClaudeModel); err != nil {
+		&lastRun, &task.LastError, &archived, &task.CodexModel, &task.ClaudeModel,
+		&task.MinFiveHourRemainingPct, &task.MaxRunMinutes); err != nil {
 		return SideTask{}, err
 	}
 	if lastRun.Valid {

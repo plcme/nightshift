@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -45,10 +46,23 @@ func (a *API) status(w http.ResponseWriter, _ *http.Request) {
 	enabled, _ := strconv.ParseBool(enabledText)
 	mainWorkText, _ := a.store.GetSetting("main_work_active", "false")
 	mainWork, _ := strconv.ParseBool(mainWorkText)
+	harvestWindow, _ := strconv.Atoi(settingValue(a.store, "harvest_window_minutes", "45"))
+	safetyMargin, _ := strconv.Atoi(settingValue(a.store, "safety_margin_minutes", "8"))
+	weeklyReserve, _ := strconv.ParseFloat(settingValue(a.store, "weekly_reserve_pct", "20"), 64)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"scheduler_enabled": enabled, "main_work_active": mainWork,
 		"quotas": quotas, "refreshed_at": refreshedAt,
+		"policy": map[string]any{"harvest_window_minutes": harvestWindow,
+			"safety_margin_minutes": safetyMargin, "weekly_reserve_pct": weeklyReserve},
 	})
+}
+
+func settingValue(store *Store, key, fallback string) string {
+	value, err := store.GetSetting(key, fallback)
+	if err != nil {
+		return fallback
+	}
+	return value
 }
 
 func (a *API) refresh(w http.ResponseWriter, r *http.Request) {
@@ -166,6 +180,10 @@ func (a *API) setSetting(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	if err := validateSetting(key, input.Value); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
 	data, err := json.Marshal(input.Value)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -180,6 +198,32 @@ func (a *API) setSetting(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"key": key, "value": input.Value})
+}
+
+func validateSetting(key string, value any) error {
+	switch key {
+	case "scheduler_enabled", "main_work_active":
+		if _, ok := value.(bool); !ok {
+			return errors.New("setting must be true or false")
+		}
+	case "harvest_window_minutes":
+		return numberInRange(value, 10, 180, "harvest window")
+	case "safety_margin_minutes":
+		return numberInRange(value, 1, 30, "safety margin")
+	case "weekly_reserve_pct":
+		return numberInRange(value, 0, 100, "weekly reserve")
+	default:
+		return errors.New("unsupported setting")
+	}
+	return nil
+}
+
+func numberInRange(value any, min, max float64, name string) error {
+	number, ok := value.(float64)
+	if !ok || number < min || number > max {
+		return fmt.Errorf("%s must be between %g and %g", name, min, max)
+	}
+	return nil
 }
 
 func decodeJSON(r *http.Request, target any) error {

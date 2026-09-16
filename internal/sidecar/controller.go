@@ -75,12 +75,17 @@ func (c *Controller) RunNextEligible(ctx context.Context, quotas []ProviderQuota
 		policy := c.policy
 		mainWorkText, _ := c.store.GetSetting("main_work_active", "false")
 		policy.MainWorkActive, _ = strconv.ParseBool(mainWorkText)
+		policy.LeadTime = c.durationSetting("harvest_window_minutes", 45) * time.Minute
+		policy.SafetyMargin = c.durationSetting("safety_margin_minutes", 8) * time.Minute
+		policy.WeeklyReservePct = c.floatSetting("weekly_reserve_pct", 20)
 		if label, labelErr := c.store.GetLabel(task.LabelID); labelErr == nil {
 			policy.MinFiveHourRemainingPct = label.MinWindowRemainingPct
-			policy.WeeklyReservePct = label.WeeklyReservePct
 			if task.ProviderPreference == "" || task.ProviderPreference == ProviderAuto && label.DefaultProvider != ProviderAuto {
 				preference = label.DefaultProvider
 			}
+		}
+		if task.MinFiveHourRemainingPct > 0 {
+			policy.MinFiveHourRemainingPct = task.MinFiveHourRemainingPct
 		}
 		decision := ChooseProvider(time.Now(), preference, quotas, policy)
 		if !decision.Eligibility.Eligible {
@@ -107,7 +112,11 @@ func (c *Controller) RunNextEligible(ctx context.Context, quotas []ProviderQuota
 		if err := c.store.MarkRunning(task.ID, decision.Provider); err != nil {
 			return err
 		}
-		result, err := c.executor.Execute(ctx, task, prompt, decision.Provider, decision.Eligibility.RunFor)
+		runFor := decision.Eligibility.RunFor
+		if task.MaxRunMinutes > 0 && runFor > time.Duration(task.MaxRunMinutes)*time.Minute {
+			runFor = time.Duration(task.MaxRunMinutes) * time.Minute
+		}
+		result, err := c.executor.Execute(ctx, task, prompt, decision.Provider, runFor)
 		if err != nil {
 			_ = c.store.MarkFailed(task.ID, err.Error())
 			return err
@@ -116,6 +125,24 @@ func (c *Controller) RunNextEligible(ctx context.Context, quotas []ProviderQuota
 		return err
 	}
 	return nil
+}
+
+func (c *Controller) durationSetting(key string, fallback int) time.Duration {
+	value, _ := c.store.GetSetting(key, strconv.Itoa(fallback))
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return time.Duration(fallback)
+	}
+	return time.Duration(parsed)
+}
+
+func (c *Controller) floatSetting(key string, fallback float64) float64 {
+	value, _ := c.store.GetSetting(key, strconv.FormatFloat(fallback, 'f', -1, 64))
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }
 
 func (c *Controller) RunTaskNow(ctx context.Context, taskID string, timeout time.Duration) error {

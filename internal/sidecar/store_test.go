@@ -26,12 +26,16 @@ func TestTaskConversationLifecycle(t *testing.T) {
 	task, err := store.CreateTask(CreateTaskInput{
 		Title: "Ship side project", Prompt: "Implement the first slice.",
 		ProviderPreference: ProviderAuto, LabelID: "side", Priority: 80,
+		MinFiveHourRemainingPct: 25, MaxRunMinutes: 45,
 	})
 	if err != nil {
 		t.Fatalf("create task: %v", err)
 	}
 	if task.Status != StatusQueued {
 		t.Fatalf("status = %q, want queued", task.Status)
+	}
+	if task.MinFiveHourRemainingPct != 25 || task.MaxRunMinutes != 45 {
+		t.Fatalf("task requirements were not persisted: %#v", task)
 	}
 
 	prompt, err := store.PendingPrompt(task.ID)

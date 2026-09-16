@@ -50,6 +50,11 @@ var migrations = []Migration{
 		Description: "add per-provider model preferences to side tasks",
 		SQL:         migration007SQL,
 	},
+	{
+		Version:     8,
+		Description: "add task-level quota and runtime requirements",
+		SQL:         migration008SQL,
+	},
 }
 
 const migration002SQL = `
@@ -193,6 +198,11 @@ INSERT INTO side_labels (
 const migration007SQL = `
 ALTER TABLE side_tasks ADD COLUMN codex_model TEXT NOT NULL DEFAULT '';
 ALTER TABLE side_tasks ADD COLUMN claude_model TEXT NOT NULL DEFAULT '';
+`
+
+const migration008SQL = `
+ALTER TABLE side_tasks ADD COLUMN min_five_hour_remaining_pct REAL NOT NULL DEFAULT 0;
+ALTER TABLE side_tasks ADD COLUMN max_run_minutes INTEGER NOT NULL DEFAULT 30;
 `
 
 // Migrate runs all pending migrations inside transactions.

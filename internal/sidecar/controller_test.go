@@ -10,16 +10,20 @@ type fakeQuotaSource struct{ quotas []ProviderQuota }
 
 func (f fakeQuotaSource) Read(context.Context) []ProviderQuota { return f.quotas }
 
-type fakeConversationExecutor struct{ calls int }
+type fakeConversationExecutor struct {
+	calls       int
+	lastTimeout time.Duration
+}
 
-func (f *fakeConversationExecutor) Execute(_ context.Context, _ SideTask, _ string, provider string, _ time.Duration) (ExecutionResult, error) {
+func (f *fakeConversationExecutor) Execute(_ context.Context, _ SideTask, _ string, provider string, timeout time.Duration) (ExecutionResult, error) {
 	f.calls++
+	f.lastTimeout = timeout
 	return ExecutionResult{Provider: provider, SessionID: "session-1", Output: "done"}, nil
 }
 
 func TestControllerRequiresExplicitSchedulerEnable(t *testing.T) {
 	store := newTestStore(t)
-	task, err := store.CreateTask(CreateTaskInput{Title: "queued", Prompt: "do it", ProjectPath: t.TempDir(), ProviderPreference: ProviderCodex, LabelID: "side"})
+	task, err := store.CreateTask(CreateTaskInput{Title: "queued", Prompt: "do it", ProjectPath: t.TempDir(), ProviderPreference: ProviderCodex, LabelID: "side", MaxRunMinutes: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,6 +53,9 @@ func TestControllerRequiresExplicitSchedulerEnable(t *testing.T) {
 	}
 	if executor.calls != 1 {
 		t.Fatalf("executor calls = %d, want 1", executor.calls)
+	}
+	if executor.lastTimeout != 10*time.Minute {
+		t.Fatalf("executor timeout = %s, want 10m", executor.lastTimeout)
 	}
 	got, _ := store.GetTask(task.ID)
 	if got.Status != StatusWaitingUser || got.SessionID != "session-1" {
